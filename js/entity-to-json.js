@@ -9,7 +9,7 @@
  */
 function convertEntityToJson(entityInput) {
     if (!entityInput) {
-        showStatus('Please enter Spring Entity code to convert', 'error');
+        // showStatus('Please enter Spring Entity code to convert', 'error');
         return null;
     }
 
@@ -39,27 +39,63 @@ function parseEntityToJson(entityCode) {
     entityCode = entityCode.replace(/\/\*[\s\S]*?\*\//g, '');
     
     // Remove JPA and Lombok annotations
-    entityCode = entityCode.replace(/@(Entity|Table|Id|GeneratedValue|GenerationType|Column|Data|Builder|NoArgsConstructor|AllArgsConstructor|Getter|Setter|ToString|EqualsAndHashCode|JsonProperty)\s*(\([^)]*\))?\s*/g, '');
+    entityCode = entityCode.replace(/@(Entity|Table|Id|GeneratedValue|GenerationType|Column|Data|Builder|Builder\.Default|NoArgsConstructor|AllArgsConstructor|Getter|Setter|ToString|EqualsAndHashCode|JsonProperty)\s*(\([^)]*\))?\s*/g, '');
     
-    // Parse nested classes first
-    const nestedClasses = {};
+    // Split input into separate entity classes
+    const entityClasses = [];
     const classPattern = /(?:public|private|protected)?\s*(?:static)?\s*class\s+(\w+)\s*(?:extends\s+\w+)?\s*(?:implements\s+[^{]+)?\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/g;
     let classMatch;
     
     while ((classMatch = classPattern.exec(entityCode)) !== null) {
         const className = classMatch[1];
         const classBody = classMatch[2];
-        nestedClasses[className] = parseClassBody(classBody);
+        entityClasses.push({ name: className, body: classBody });
     }
     
-    // Find all field declarations in main class
-    const fieldPattern = /(?:private|public|protected)?\s+(\w+(?:<[^>]+>)?)\s+(\w+)\s*;/g;
-    let match;
-    
-    while ((match = fieldPattern.exec(entityCode)) !== null) {
-        const type = match[1];
-        const fieldName = match[2];
-        result[fieldName] = generateSampleValue(type, fieldName, nestedClasses);
+    // If multiple entity classes found, parse only the first one
+    // If only one class found, parse it
+    if (entityClasses.length > 0) {
+        const mainClass = entityClasses[0];
+        const nestedClasses = {};
+        
+        // Parse other classes as nested classes
+        for (let i = 1; i < entityClasses.length; i++) {
+            const entityClass = entityClasses[i];
+            nestedClasses[entityClass.name] = parseClassBody(entityClass.body, mainClass.name);
+        }
+        
+        // Parse main class fields
+        // First, remove annotations and default value initializations
+        let cleanedBody = mainClass.body;
+        
+        // Identify inverse relation fields (fields with mappedBy attribute)
+        const inverseRelationFields = new Set();
+        const mappedByPattern = /@(OneToMany|ManyToMany|OneToOne)\s*\([^)]*mappedBy\s*=\s*["']([^"']+)["'][^)]*\)\s*\n\s*(?:private|public|protected)?\s+\w+(?:<[^>]+>)?\s+(\w+)\s*;/g;
+        let mappedByMatch;
+        
+        while ((mappedByMatch = mappedByPattern.exec(cleanedBody)) !== null) {
+            inverseRelationFields.add(mappedByMatch[3]);
+        }
+        
+        // Remove annotations (lines starting with @)
+        cleanedBody = cleanedBody.replace(/@[^\n]*\n/g, '');
+        // Remove default value initializations (= ...)
+        cleanedBody = cleanedBody.replace(/=\s*[^;]+;/g, ';');
+        
+        const fieldPattern = /(?:private|public|protected)?\s+(\w+(?:<[^>]+>)?)\s+(\w+)\s*;/g;
+        let match;
+        
+        while ((match = fieldPattern.exec(cleanedBody)) !== null) {
+            const type = match[1];
+            const fieldName = match[2];
+            
+            // Skip inverse relation fields
+            if (inverseRelationFields.has(fieldName)) {
+                continue;
+            }
+            
+            result[fieldName] = generateSampleValue(type, fieldName, nestedClasses);
+        }
     }
     
     return result;
@@ -68,16 +104,45 @@ function parseEntityToJson(entityCode) {
 /**
  * Parse class body to extract fields
  * @param {string} classBody - Class body content
+ * @param {string} parentClassName - Parent class name to exclude back-references
  * @returns {Object} Parsed fields object
  */
-function parseClassBody(classBody) {
+function parseClassBody(classBody, parentClassName = null) {
     const result = {};
+    // First, remove annotations and default value initializations
+    let cleanedBody = classBody;
+    
+    // Identify inverse relation fields (fields with mappedBy attribute)
+    const inverseRelationFields = new Set();
+    const mappedByPattern = /@(OneToMany|ManyToMany|OneToOne)\s*\([^)]*mappedBy\s*=\s*["']([^"']+)["'][^)]*\)\s*\n\s*(?:private|public|protected)?\s+\w+(?:<[^>]+>)?\s+(\w+)\s*;/g;
+    let mappedByMatch;
+    
+    while ((mappedByMatch = mappedByPattern.exec(cleanedBody)) !== null) {
+        inverseRelationFields.add(mappedByMatch[3]);
+    }
+    
+    // Remove annotations (lines starting with @)
+    cleanedBody = cleanedBody.replace(/@[^\n]*\n/g, '');
+    // Remove default value initializations (= ...)
+    cleanedBody = cleanedBody.replace(/=\s*[^;]+;/g, ';');
+    
     const fieldPattern = /(?:private|public|protected)?\s+(\w+(?:<[^>]+>)?)\s+(\w+)\s*;/g;
     let match;
     
-    while ((match = fieldPattern.exec(classBody)) !== null) {
+    while ((match = fieldPattern.exec(cleanedBody)) !== null) {
         const type = match[1];
         const fieldName = match[2];
+        
+        // Skip inverse relation fields
+        if (inverseRelationFields.has(fieldName)) {
+            continue;
+        }
+        
+        // Skip fields that reference the parent class (back-references)
+        if (parentClassName && type === parentClassName) {
+            continue;
+        }
+        
         result[fieldName] = generateSampleValue(type, fieldName, {});
     }
     
@@ -140,7 +205,6 @@ function generateSampleValue(type, fieldName, nestedClasses = {}) {
             return 1;
         case 'long':
         case 'Long':
-            if (lowerFieldName.includes('uuid')) return '550e8400-e29b-41d4-a716-446655440000';
             if (lowerFieldName.includes('timestamp')) return 1705312200000;
             return 1000000;
         case 'double':

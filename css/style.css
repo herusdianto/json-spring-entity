@@ -393,7 +393,7 @@ header p {
 /* Text Areas */
 textarea {
     width: 100%;
-    min-height: 200px;
+    min-height: 500px;
     padding: 15px;
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 0.9rem;
@@ -903,23 +903,6 @@ body {
     gap: 10px;
 }
 
-.entity-to-json-btn {
-    padding: 12px 20px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
-    border: none;
-    border-radius: 8px;
-    color: white;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.entity-to-json-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(99, 102, 241, 0.3);
-}
-
 .entity-clear-btn,
 .entity-copy-btn,
 .entity-download-btn {
@@ -976,6 +959,10 @@ body {
     background: #333a41;
     border-color: var(--secondary-color);
     color: #6ee7b7;
+}
+
+#entity-actions-input {
+    grid-template-columns: 1fr !important;
 }
 
 /* Responsive */
