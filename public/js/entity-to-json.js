@@ -39,27 +39,47 @@ function parseEntityToJson(entityCode) {
     entityCode = entityCode.replace(/\/\*[\s\S]*?\*\//g, '');
     
     // Remove JPA and Lombok annotations
-    entityCode = entityCode.replace(/@(Entity|Table|Id|GeneratedValue|GenerationType|Column|Data|Builder|NoArgsConstructor|AllArgsConstructor|Getter|Setter|ToString|EqualsAndHashCode|JsonProperty)\s*(\([^)]*\))?\s*/g, '');
+    entityCode = entityCode.replace(/@(Entity|Table|Id|GeneratedValue|GenerationType|Column|Data|Builder|Builder\.Default|NoArgsConstructor|AllArgsConstructor|Getter|Setter|ToString|EqualsAndHashCode|JsonProperty)\s*(\([^)]*\))?\s*/g, '');
     
-    // Parse nested classes first
-    const nestedClasses = {};
+    // Split input into separate entity classes
+    const entityClasses = [];
     const classPattern = /(?:public|private|protected)?\s*(?:static)?\s*class\s+(\w+)\s*(?:extends\s+\w+)?\s*(?:implements\s+[^{]+)?\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/g;
     let classMatch;
     
     while ((classMatch = classPattern.exec(entityCode)) !== null) {
         const className = classMatch[1];
         const classBody = classMatch[2];
-        nestedClasses[className] = parseClassBody(classBody);
+        entityClasses.push({ name: className, body: classBody });
     }
     
-    // Find all field declarations in main class
-    const fieldPattern = /(?:private|public|protected)?\s+(\w+(?:<[^>]+>)?)\s+(\w+)\s*;/g;
-    let match;
-    
-    while ((match = fieldPattern.exec(entityCode)) !== null) {
-        const type = match[1];
-        const fieldName = match[2];
-        result[fieldName] = generateSampleValue(type, fieldName, nestedClasses);
+    // If multiple entity classes found, parse only the first one
+    // If only one class found, parse it
+    if (entityClasses.length > 0) {
+        const mainClass = entityClasses[0];
+        const nestedClasses = {};
+        
+        // Parse other classes as nested classes
+        for (let i = 1; i < entityClasses.length; i++) {
+            const entityClass = entityClasses[i];
+            nestedClasses[entityClass.name] = parseClassBody(entityClass.body);
+        }
+        
+        // Parse main class fields
+        // First, remove annotations and default value initializations
+        let cleanedBody = mainClass.body;
+        // Remove annotations (lines starting with @)
+        cleanedBody = cleanedBody.replace(/@[^\n]*\n/g, '');
+        // Remove default value initializations (= ...)
+        cleanedBody = cleanedBody.replace(/=\s*[^;]+;/g, ';');
+        
+        const fieldPattern = /(?:private|public|protected)?\s+(\w+(?:<[^>]+>)?)\s+(\w+)\s*;/g;
+        let match;
+        
+        while ((match = fieldPattern.exec(cleanedBody)) !== null) {
+            const type = match[1];
+            const fieldName = match[2];
+            result[fieldName] = generateSampleValue(type, fieldName, nestedClasses);
+        }
     }
     
     return result;
@@ -72,10 +92,17 @@ function parseEntityToJson(entityCode) {
  */
 function parseClassBody(classBody) {
     const result = {};
+    // First, remove annotations and default value initializations
+    let cleanedBody = classBody;
+    // Remove annotations (lines starting with @)
+    cleanedBody = cleanedBody.replace(/@[^\n]*\n/g, '');
+    // Remove default value initializations (= ...)
+    cleanedBody = cleanedBody.replace(/=\s*[^;]+;/g, ';');
+    
     const fieldPattern = /(?:private|public|protected)?\s+(\w+(?:<[^>]+>)?)\s+(\w+)\s*;/g;
     let match;
     
-    while ((match = fieldPattern.exec(classBody)) !== null) {
+    while ((match = fieldPattern.exec(cleanedBody)) !== null) {
         const type = match[1];
         const fieldName = match[2];
         result[fieldName] = generateSampleValue(type, fieldName, {});
