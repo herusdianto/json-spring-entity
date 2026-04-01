@@ -61,12 +61,22 @@ function parseEntityToJson(entityCode) {
         // Parse other classes as nested classes
         for (let i = 1; i < entityClasses.length; i++) {
             const entityClass = entityClasses[i];
-            nestedClasses[entityClass.name] = parseClassBody(entityClass.body);
+            nestedClasses[entityClass.name] = parseClassBody(entityClass.body, mainClass.name);
         }
         
         // Parse main class fields
         // First, remove annotations and default value initializations
         let cleanedBody = mainClass.body;
+        
+        // Identify inverse relation fields (fields with mappedBy attribute)
+        const inverseRelationFields = new Set();
+        const mappedByPattern = /@(OneToMany|ManyToMany|OneToOne)\s*\([^)]*mappedBy\s*=\s*["']([^"']+)["'][^)]*\)\s*\n\s*(?:private|public|protected)?\s+\w+(?:<[^>]+>)?\s+(\w+)\s*;/g;
+        let mappedByMatch;
+        
+        while ((mappedByMatch = mappedByPattern.exec(cleanedBody)) !== null) {
+            inverseRelationFields.add(mappedByMatch[3]);
+        }
+        
         // Remove annotations (lines starting with @)
         cleanedBody = cleanedBody.replace(/@[^\n]*\n/g, '');
         // Remove default value initializations (= ...)
@@ -78,6 +88,12 @@ function parseEntityToJson(entityCode) {
         while ((match = fieldPattern.exec(cleanedBody)) !== null) {
             const type = match[1];
             const fieldName = match[2];
+            
+            // Skip inverse relation fields
+            if (inverseRelationFields.has(fieldName)) {
+                continue;
+            }
+            
             result[fieldName] = generateSampleValue(type, fieldName, nestedClasses);
         }
     }
@@ -88,12 +104,23 @@ function parseEntityToJson(entityCode) {
 /**
  * Parse class body to extract fields
  * @param {string} classBody - Class body content
+ * @param {string} parentClassName - Parent class name to exclude back-references
  * @returns {Object} Parsed fields object
  */
-function parseClassBody(classBody) {
+function parseClassBody(classBody, parentClassName = null) {
     const result = {};
     // First, remove annotations and default value initializations
     let cleanedBody = classBody;
+    
+    // Identify inverse relation fields (fields with mappedBy attribute)
+    const inverseRelationFields = new Set();
+    const mappedByPattern = /@(OneToMany|ManyToMany|OneToOne)\s*\([^)]*mappedBy\s*=\s*["']([^"']+)["'][^)]*\)\s*\n\s*(?:private|public|protected)?\s+\w+(?:<[^>]+>)?\s+(\w+)\s*;/g;
+    let mappedByMatch;
+    
+    while ((mappedByMatch = mappedByPattern.exec(cleanedBody)) !== null) {
+        inverseRelationFields.add(mappedByMatch[3]);
+    }
+    
     // Remove annotations (lines starting with @)
     cleanedBody = cleanedBody.replace(/@[^\n]*\n/g, '');
     // Remove default value initializations (= ...)
@@ -105,6 +132,17 @@ function parseClassBody(classBody) {
     while ((match = fieldPattern.exec(cleanedBody)) !== null) {
         const type = match[1];
         const fieldName = match[2];
+        
+        // Skip inverse relation fields
+        if (inverseRelationFields.has(fieldName)) {
+            continue;
+        }
+        
+        // Skip fields that reference the parent class (back-references)
+        if (parentClassName && type === parentClassName) {
+            continue;
+        }
+        
         result[fieldName] = generateSampleValue(type, fieldName, {});
     }
     
