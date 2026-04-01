@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background -->
+  <rect x="2" y="2" width="28" height="28" rx="6" fill="#1e1b4b"/>
+  
+  <!-- JSON brackets with gradient effect -->
+  <path d="M8 8 L8 24" stroke="#818cf8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M8 8 L12 8" stroke="#818cf8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M8 24 L12 24" stroke="#818cf8" stroke-width="3" stroke-linecap="round"/>
+  
+  <path d="M24 8 L24 24" stroke="#818cf8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M24 8 L20 8" stroke="#818cf8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M24 24 L20 24" stroke="#818cf8" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Entity icon - stylized document/data -->
+  <rect x="12" y="10" width="8" height="12" rx="1" fill="#4f46e5"/>
+  <rect x="13" y="12" width="6" height="1.5" rx="0.5" fill="#c7d2fe"/>
+  <rect x="13" y="15" width="4" height="1.5" rx="0.5" fill="#c7d2fe"/>
+  <rect x="13" y="18" width="5" height="1.5" rx="0.5" fill="#c7d2fe"/>
+  
+  <!-- Decorative dots -->
+  <circle cx="10" cy="16" r="1" fill="#22c55e"/>
+  <circle cx="22" cy="16" r="1" fill="#22c55e"/>
+</svg>
