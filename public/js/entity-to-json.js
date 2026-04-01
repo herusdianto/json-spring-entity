@@ -205,7 +205,6 @@ function generateSampleValue(type, fieldName, nestedClasses = {}) {
             return 1;
         case 'long':
         case 'Long':
-            if (lowerFieldName.includes('uuid')) return '550e8400-e29b-41d4-a716-446655440000';
             if (lowerFieldName.includes('timestamp')) return 1705312200000;
             return 1000000;
         case 'double':
