@@ -212,4 +212,4 @@ Contributions are welcome! Feel free to submit a Pull Request.
 
 ## Demo
 
-[https://herusdianto.github.io/json-entity/](https://herusdianto.github.io/json-entity/)
+[https://herusdianto.github.io/json-spring-entity/](https://herusdianto.github.io/json-spring-entity/)
