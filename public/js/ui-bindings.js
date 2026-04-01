@@ -124,7 +124,7 @@ function bindClassBoxButtons() {
         btn.addEventListener('click', () => {
             const code = btn.getAttribute('data-code');
             const textarea = document.createElement('textarea');
-            textarea.innerHTML = code;
+            textarea.textContent = code;
             const decodedCode = textarea.value;
 
             navigator.clipboard.writeText(decodedCode)
@@ -139,7 +139,7 @@ function bindClassBoxButtons() {
             const filename = btn.getAttribute('data-filename');
 
             const textarea = document.createElement('textarea');
-            textarea.innerHTML = code;
+            textarea.textContent = code;
             const decodedCode = textarea.value;
 
             const blob = new Blob([decodedCode], { type: 'text/plain' });
@@ -216,7 +216,7 @@ function getAllCode() {
     document.querySelectorAll('.class-box .copy-btn').forEach((btn, index) => {
         const code = btn.getAttribute('data-code');
         const textarea = document.createElement('textarea');
-        textarea.innerHTML = code;
+        textarea.textContent = code;
         if (index > 0) allCode += '\n\n';
         allCode += textarea.value;
     });
