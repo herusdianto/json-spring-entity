@@ -9,7 +9,7 @@
  */
 function convertEntityToJson(entityInput) {
     if (!entityInput) {
-        showStatus('Please enter Spring Entity code to convert', 'error');
+        // showStatus('Please enter Spring Entity code to convert', 'error');
         return null;
     }
 

@@ -231,14 +231,11 @@ function getAllCode() {
  * @param {Function} downloadFn - Download function
  */
 function bindEntityToJsonActions(convertFn, clearFn, copyFn, downloadFn) {
-    const convertBtn = document.getElementById('entity-to-json-btn');
     const clearBtn = document.getElementById('entity-clear-btn');
     const copyBtn = document.getElementById('entity-copy-btn');
     const downloadBtn = document.getElementById('entity-download-btn');
+    const entityInput = document.getElementById('entity-input');
 
-    if (convertBtn) {
-        convertBtn.addEventListener('click', convertFn);
-    }
     if (clearBtn) {
         clearBtn.addEventListener('click', clearFn);
     }
@@ -247,5 +244,9 @@ function bindEntityToJsonActions(convertFn, clearFn, copyFn, downloadFn) {
     }
     if (downloadBtn) {
         downloadBtn.addEventListener('click', downloadFn);
+    }
+    if (entityInput) {
+        entityInput.addEventListener('input', convertFn);
+        entityInput.addEventListener('change', convertFn);
     }
 }
