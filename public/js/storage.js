@@ -58,8 +58,8 @@ function getOptions() {
     return {
         useData: document.getElementById('use-data').checked,
         useBuilder: document.getElementById('use-builder').checked,
-        useNoArgs: document.getElementById('use-noargs').checked,
-        useAllArgs: document.getElementById('use-allargs').checked,
+        useNoargs: document.getElementById('use-noargs').checked,
+        useAllargs: document.getElementById('use-allargs').checked,
         useGetter: document.getElementById('use-getter').checked,
         useSetter: document.getElementById('use-setter').checked,
         useToString: document.getElementById('use-tostring').checked,
@@ -67,8 +67,18 @@ function getOptions() {
         useJackson: document.getElementById('use-jackson').checked,
         usePrivate: document.getElementById('use-private').checked,
         generateNested: document.getElementById('generate-nested').checked,
-        usePrimitives: document.getElementById('use-primitives').checked
+        usePrimitives: document.getElementById('use-primitives').checked,
+        useSnakeCaseColumns: document.getElementById('use-snake-case-columns').checked
     };
+}
+
+/**
+ * Convert kebab-case to camelCase
+ * @param {string} str - Kebab-case string
+ * @returns {string} CamelCase string
+ */
+function toCamelCase(str) {
+    return str.replace(/-([a-zA-Z])/g, (match, letter) => letter.toUpperCase());
 }
 
 /**
@@ -80,10 +90,11 @@ function applyOptions(options) {
     if (!form) return;
     
     form.querySelectorAll('input,select,textarea').forEach(el => {
+        const camelName = toCamelCase(el.name);
         if (el.type === 'checkbox') {
-            el.checked = !!options[el.name];
-        } else if (options[el.name] !== undefined) {
-            el.value = options[el.name];
+            el.checked = !!options[camelName];
+        } else if (options[camelName] !== undefined) {
+            el.value = options[camelName];
         }
     });
 }

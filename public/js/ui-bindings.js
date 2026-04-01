@@ -98,7 +98,8 @@ function bindAutoConvert(convertFn) {
         document.getElementById('use-jackson'),
         document.getElementById('use-private'),
         document.getElementById('generate-nested'),
-        document.getElementById('use-primitives')
+        document.getElementById('use-primitives'),
+        document.getElementById('use-snake-case-columns')
     ];
     inputs.forEach(input => {
         if (input) {

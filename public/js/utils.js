@@ -94,6 +94,17 @@ function updateStats(classCount, fieldCount, annotationCount) {
 }
 
 /**
+ * Check if string is in snake_case format
+ * @param {string} str - Input string
+ * @returns {boolean} True if string is in snake_case
+ */
+function isSnakeCase(str) {
+    // snake_case: lowercase letters, numbers, and underscores only
+    // Must not contain uppercase letters or hyphens
+    return /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/.test(str);
+}
+
+/**
  * Set current year in footer
  */
 function setCurrentYear() {

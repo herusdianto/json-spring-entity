@@ -117,7 +117,7 @@ class JsonToEntityConverter {
 
     loadExample() {
         const exampleJson = {
-            "id": 1,
+            "uuid": "550e8400-e29b-41d4-a716-446655440000",
             "firstName": "John",
             "lastName": "Doe",
             "email": "john.doe@example.com",
@@ -165,6 +165,7 @@ class JsonToEntityConverter {
         document.getElementById('use-jackson').checked = true;
         document.getElementById('use-private').checked = true;
         document.getElementById('generate-nested').checked = true;
+        document.getElementById('use-snake-case-columns').checked = true;
         document.getElementById('use-primitives').checked = false;
 
         showStatus('Example JSON loaded!', 'success');

@@ -10,22 +10,26 @@
  * @param {Map} generatedClasses - Map to store generated classes
  * @param {Map} classUsedTypes - Map to track used types per class
  * @param {Object} counters - Object to track counts
+ * @param {string} parentClassName - Parent class name for inverse relations
  * @returns {string} Generated Spring Entity code
  */
-function generateEntity(className, jsonObj, options, generatedClasses, classUsedTypes, counters) {
+function generateEntity(className, jsonObj, options, generatedClasses, classUsedTypes, counters, parentClassName = null, isNested = false) {
     counters.classCount++;
     let code = '';
     const usedTypes = new Set();
 
-    // Class annotations
-    const annotations = generateClassAnnotations(options, className);
-    annotations.forEach(ann => {
-        code += ann + '\n';
-        counters.annotationCount++;
-    });
+    // Class annotations - only add for non-nested classes
+    if (!isNested) {
+        const annotations = generateClassAnnotations(options, className);
+        annotations.forEach(ann => {
+            code += ann + '\n';
+            counters.annotationCount++;
+        });
+    }
 
     // Class declaration
-    code += `public class ${toPascalCase(className)} {\n\n`;
+    const indent = isNested ? '    ' : '';
+    code += `${indent}public class ${toPascalCase(className)} {\n\n`;
 
     // Fields
     const fields = [];
@@ -33,20 +37,29 @@ function generateEntity(className, jsonObj, options, generatedClasses, classUsed
         // If root is array, analyze first element
         if (jsonObj.length > 0 && typeof jsonObj[0] === 'object') {
             Object.keys(jsonObj[0]).forEach(key => {
-                fields.push(generateField(key, jsonObj[0][key], options, className, usedTypes, generatedClasses, classUsedTypes, counters));
+                fields.push(generateField(key, jsonObj[0][key], options, className, usedTypes, generatedClasses, classUsedTypes, counters, isNested));
             });
         }
     } else if (typeof jsonObj === 'object' && jsonObj !== null) {
         Object.keys(jsonObj).forEach(key => {
-            fields.push(generateField(key, jsonObj[key], options, className, usedTypes, generatedClasses, classUsedTypes, counters));
+            fields.push(generateField(key, jsonObj[key], options, className, usedTypes, generatedClasses, classUsedTypes, counters, isNested));
         });
     }
 
-    code += fields.join('\n\n');
-    code += '\n}';
+    // Add inverse relation field if this is a nested entity from OneToMany
+    if (parentClassName) {
+        const inverseField = generateInverseRelationField(parentClassName, options, usedTypes, isNested);
+        fields.push(inverseField);
+    }
 
-    generatedClasses.set(className, code);
-    classUsedTypes.set(className, usedTypes);
+    code += fields.join('\n\n');
+    code += `\n${indent}}`;
+
+    // Only store in generatedClasses if not nested (nested classes are part of parent)
+    if (!isNested) {
+        generatedClasses.set(className, code);
+        classUsedTypes.set(className, usedTypes);
+    }
     return code;
 }
 
@@ -66,8 +79,8 @@ function generateClassAnnotations(options, className) {
     // Lombok annotations
     if (options.useData) annotations.push('@Data');
     if (options.useBuilder) annotations.push('@Builder');
-    if (options.useNoArgs) annotations.push('@NoArgsConstructor');
-    if (options.useAllArgs) annotations.push('@AllArgsConstructor');
+    if (options.useNoargs) annotations.push('@NoArgsConstructor');
+    if (options.useAllargs) annotations.push('@AllArgsConstructor');
     if (options.useGetter) annotations.push('@Getter');
     if (options.useSetter) annotations.push('@Setter');
     if (options.useToString) annotations.push('@ToString');
@@ -102,11 +115,41 @@ function generateField(key, value, options, parentClassName, usedTypes, generate
     if (javaType === 'LocalDateTime') usedTypes.add('LocalDateTime');
     if (javaType === 'Instant') usedTypes.add('Instant');
 
-    // JPA Column annotation
-    if (key !== fieldName) {
+    // Check if this is a relation (object or array of objects)
+    const isRelation = typeof value === 'object' && value !== null && !Array.isArray(value);
+    const isOneToMany = Array.isArray(value) && value.length > 0 && typeof value[0] === 'object' && value[0] !== null;
+
+    // JPA Column annotation - only add if key is not already in snake_case and not a relation
+    if (!isSnakeCase(key) && !isRelation && !isOneToMany) {
         code += indent + `@Column(name = "${toSnakeCase(key)}")\n`;
         counters.annotationCount++;
         usedTypes.add('Column');
+    }
+
+    // Add relation annotations for object relations (ManyToOne)
+    if (isRelation) {
+        code += indent + '@ManyToOne\n';
+        code += indent + `@JoinColumn(name = "${toSnakeCase(key)}_id")\n`;
+        counters.annotationCount += 2;
+        usedTypes.add('ManyToOne');
+        usedTypes.add('JoinColumn');
+        // Generate nested entity
+        const nestedClassName = toPascalCase(singularize(key));
+        if (!generatedClasses.has(nestedClassName)) {
+            generateEntity(nestedClassName, value, options, generatedClasses, classUsedTypes, counters, parentClassName);
+        }
+    }
+
+    // Add relation annotations for array relations (OneToMany)
+    if (isOneToMany) {
+        const nestedClassName = toPascalCase(singularize(key));
+        code += indent + `@OneToMany(mappedBy = "${toCamelCase(parentClassName)}")\n`;
+        counters.annotationCount++;
+        usedTypes.add('OneToMany');
+        // Generate nested entity with inverse relation
+        if (!generatedClasses.has(nestedClassName)) {
+            generateEntity(nestedClassName, value[0], options, generatedClasses, classUsedTypes, counters, parentClassName);
+        }
     }
 
     // Jackson annotation
@@ -160,13 +203,13 @@ function generateField(key, value, options, parentClassName, usedTypes, generate
     }
     code += ';';
 
-    // Add @Id and @GeneratedValue for id field
+    // Add @Id and @GeneratedValue for id field with UUID generator
     if (fieldName === 'id') {
-        code = indent + '@Id\n' + indent + '@GeneratedValue(strategy = GenerationType.IDENTITY)\n' + code;
-        counters.annotationCount += 2;
+        code = indent + '@Id\n' + indent + '@GeneratedValue(generator = "uuid")\n' + indent + '@GenericGenerator(name = "uuid", strategy = "uuid2")\n' + code;
+        counters.annotationCount += 3;
         usedTypes.add('Id');
         usedTypes.add('GeneratedValue');
-        usedTypes.add('GenerationType');
+        usedTypes.add('GenericGenerator');
     }
 
     return code;
@@ -229,7 +272,7 @@ function getJavaType(key, value, options, parentClassName, usedTypes, generatedC
                     if (typeof value[0] === 'object' && !Array.isArray(value[0]) && value[0] !== null) {
                         const nestedClassName = toPascalCase(singularize(key));
                         if (!generatedClasses.has(nestedClassName)) {
-                            generateEntity(nestedClassName, value[0], options, generatedClasses, classUsedTypes, counters);
+                            generateEntity(nestedClassName, value[0], options, generatedClasses, classUsedTypes, counters, parentClassName);
                         }
                         return `List<${nestedClassName}>`;
                     }
@@ -237,9 +280,9 @@ function getJavaType(key, value, options, parentClassName, usedTypes, generatedC
                 }
                 return 'List<Object>';
             } else {
-                const nestedClassName = toPascalCase(key);
+                const nestedClassName = toPascalCase(singularize(key));
                 if (!generatedClasses.has(nestedClassName)) {
-                    generateEntity(nestedClassName, value, options, generatedClasses, classUsedTypes, counters);
+                    generateEntity(nestedClassName, value, options, generatedClasses, classUsedTypes, counters, parentClassName);
                 }
                 return nestedClassName;
             }
@@ -264,12 +307,16 @@ function collectImports(options, flags) {
     imports.push('import javax.persistence.GeneratedValue;');
     imports.push('import javax.persistence.GenerationType;');
     imports.push('import javax.persistence.Column;');
+    imports.push('import javax.persistence.ManyToOne;');
+    imports.push('import javax.persistence.OneToMany;');
+    imports.push('import javax.persistence.JoinColumn;');
+    imports.push('import org.hibernate.annotations.GenericGenerator;');
 
     // Lombok imports
     if (options.useData) imports.push('import lombok.Data;');
     if (options.useBuilder) imports.push('import lombok.Builder;');
-    if (options.useNoArgs) imports.push('import lombok.NoArgsConstructor;');
-    if (options.useAllArgs) imports.push('import lombok.AllArgsConstructor;');
+    if (options.useNoargs) imports.push('import lombok.NoArgsConstructor;');
+    if (options.useAllargs) imports.push('import lombok.AllArgsConstructor;');
     if (options.useGetter) imports.push('import lombok.Getter;');
     if (options.useSetter) imports.push('import lombok.Setter;');
     if (options.useToString) imports.push('import lombok.ToString;');
@@ -293,6 +340,31 @@ function collectImports(options, flags) {
 }
 
 /**
+ * Generate inverse relation field for OneToMany relationships
+ * @param {string} parentClassName - Parent class name
+ * @param {Object} options - Conversion options
+ * @param {Set} usedTypes - Set to track used types
+ * @returns {string} Generated inverse relation field code
+ */
+function generateInverseRelationField(parentClassName, options, usedTypes) {
+    const indent = '    ';
+    let code = '';
+    const fieldName = toCamelCase(parentClassName);
+    
+    // Add ManyToOne relation
+    code += indent + '@ManyToOne\n';
+    code += indent + `@JoinColumn(name = "${toSnakeCase(parentClassName)}_id")\n`;
+    usedTypes.add('ManyToOne');
+    usedTypes.add('JoinColumn');
+    
+    // Field declaration
+    const visibility = options.usePrivate ? 'private' : 'public';
+    code += indent + `${visibility} ${parentClassName} ${fieldName};`;
+    
+    return code;
+}
+
+/**
  * Get imports for used types
  * @param {Set} usedTypes - Set of used types
  * @param {Object} options - Conversion options
@@ -307,11 +379,15 @@ function getImportsForUsedTypes(usedTypes, options) {
     if (usedTypes.has('GeneratedValue')) imports.push('import javax.persistence.GeneratedValue;');
     if (usedTypes.has('GenerationType')) imports.push('import javax.persistence.GenerationType;');
     if (usedTypes.has('Column')) imports.push('import javax.persistence.Column;');
+    if (usedTypes.has('ManyToOne')) imports.push('import javax.persistence.ManyToOne;');
+    if (usedTypes.has('OneToMany')) imports.push('import javax.persistence.OneToMany;');
+    if (usedTypes.has('JoinColumn')) imports.push('import javax.persistence.JoinColumn;');
+    if (usedTypes.has('GenericGenerator')) imports.push('import org.hibernate.annotations.GenericGenerator;');
     // Lombok
     if (options.useData) imports.push('import lombok.Data;');
     if (usedTypes.has('Builder')) imports.push('import lombok.Builder;');
-    if (options.useNoArgs) imports.push('import lombok.NoArgsConstructor;');
-    if (options.useAllArgs) imports.push('import lombok.AllArgsConstructor;');
+    if (options.useNoargs) imports.push('import lombok.NoArgsConstructor;');
+    if (options.useAllargs) imports.push('import lombok.AllArgsConstructor;');
     if (options.useGetter) imports.push('import lombok.Getter;');
     if (options.useSetter) imports.push('import lombok.Setter;');
     if (options.useToString) imports.push('import lombok.ToString;');
