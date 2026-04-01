@@ -41,14 +41,44 @@ function parseEntityToJson(entityCode) {
     // Remove JPA and Lombok annotations
     entityCode = entityCode.replace(/@(Entity|Table|Id|GeneratedValue|GenerationType|Column|Data|Builder|NoArgsConstructor|AllArgsConstructor|Getter|Setter|ToString|EqualsAndHashCode|JsonProperty)\s*(\([^)]*\))?\s*/g, '');
     
-    // Find all field declarations
+    // Parse nested classes first
+    const nestedClasses = {};
+    const classPattern = /(?:public|private|protected)?\s*(?:static)?\s*class\s+(\w+)\s*(?:extends\s+\w+)?\s*(?:implements\s+[^{]+)?\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/g;
+    let classMatch;
+    
+    while ((classMatch = classPattern.exec(entityCode)) !== null) {
+        const className = classMatch[1];
+        const classBody = classMatch[2];
+        nestedClasses[className] = parseClassBody(classBody);
+    }
+    
+    // Find all field declarations in main class
     const fieldPattern = /(?:private|public|protected)?\s+(\w+(?:<[^>]+>)?)\s+(\w+)\s*;/g;
     let match;
     
     while ((match = fieldPattern.exec(entityCode)) !== null) {
         const type = match[1];
         const fieldName = match[2];
-        result[fieldName] = generateSampleValue(type, fieldName);
+        result[fieldName] = generateSampleValue(type, fieldName, nestedClasses);
+    }
+    
+    return result;
+}
+
+/**
+ * Parse class body to extract fields
+ * @param {string} classBody - Class body content
+ * @returns {Object} Parsed fields object
+ */
+function parseClassBody(classBody) {
+    const result = {};
+    const fieldPattern = /(?:private|public|protected)?\s+(\w+(?:<[^>]+>)?)\s+(\w+)\s*;/g;
+    let match;
+    
+    while ((match = fieldPattern.exec(classBody)) !== null) {
+        const type = match[1];
+        const fieldName = match[2];
+        result[fieldName] = generateSampleValue(type, fieldName, {});
     }
     
     return result;
@@ -58,9 +88,10 @@ function parseEntityToJson(entityCode) {
  * Generate sample value based on Java type
  * @param {string} type - Java type
  * @param {string} fieldName - Field name
+ * @param {Object} nestedClasses - Nested classes definitions
  * @returns {*} Sample value
  */
-function generateSampleValue(type, fieldName) {
+function generateSampleValue(type, fieldName, nestedClasses = {}) {
     // Handle generic types like List<String>, Map<String, Object>
     const genericMatch = type.match(/^(\w+)<(.+)>$/);
     if (genericMatch) {
@@ -68,20 +99,20 @@ function generateSampleValue(type, fieldName) {
         const innerType = genericMatch[2];
         
         if (containerType === 'List' || containerType === 'ArrayList') {
-            return [generateSampleValue(innerType.trim(), fieldName)];
+            return [generateSampleValue(innerType.trim(), fieldName, nestedClasses)];
         }
         if (containerType === 'Map') {
-            return { "key": generateSampleValue(innerType.split(',')[1]?.trim() || 'Object', fieldName) };
+            return { "key": generateSampleValue(innerType.split(',')[1]?.trim() || 'Object', fieldName, nestedClasses) };
         }
         if (containerType === 'Set') {
-            return [generateSampleValue(innerType.trim(), fieldName)];
+            return [generateSampleValue(innerType.trim(), fieldName, nestedClasses)];
         }
     }
     
     // Handle array types
     if (type.endsWith('[]')) {
         const elementType = type.slice(0, -2);
-        return [generateSampleValue(elementType, fieldName)];
+        return [generateSampleValue(elementType, fieldName, nestedClasses)];
     }
     
     // Handle primitive and common types
@@ -151,6 +182,10 @@ function generateSampleValue(type, fieldName) {
         case 'Object':
             return {};
         default:
+            // Check if type matches a nested class
+            if (nestedClasses[type]) {
+                return nestedClasses[type];
+            }
             return {};
     }
 }
